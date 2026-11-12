@@ -1,55 +1,18 @@
-# Prerequisites
-*.d
+# Ignore build directories
+**/build/
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# Text files can be re-generated
+P1_FFT/tb/golden_model/*.txt
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# Keep the Qsys file
+P1_FFT/ip/**
+!/P1_FFT/ip/*.qsys
 
-# Precompiled Headers
-*.gch
-*.pch
+# Keep the mentor (contains ModelSim Tcl script) and "simulation library" directories.
+P1_FFT/tb/testbench/*
+!/P1_FFT/tb/testbench/mentor/
+!/P1_FFT/tb/testbench/fft_ip_tb/
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+P1_FFT/tb/testbench/fft_ip_tb/simulation/submodules/aldec/
+P1_FFT/tb/testbench/fft_ip_tb/simulation/submodules/c_model/
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo
