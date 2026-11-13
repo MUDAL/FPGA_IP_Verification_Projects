@@ -1,5 +1,5 @@
 # FFT IP Core Verification
-Custom verification of various Altera FFT IP Core.
+Custom verification of the Altera FFT IP Core.
 
 ## Generating the Quartus project
 Use the following commands.
