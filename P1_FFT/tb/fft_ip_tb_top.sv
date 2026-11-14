@@ -147,11 +147,12 @@ module fft_ip_tb_top (
 
     localparam int OUTPUT_WIDTH = 22;
 
-    function bit absolute_val(logic signed [OUTPUT_WIDTH-1:0] expected, 
-                              logic signed [OUTPUT_WIDTH-1:0] got);
-        logic signed [OUTPUT_WIDTH-1:0] difference;
-        difference   = expected - got;
-        absolute_val = (difference == 1 || difference == -1); 
+    // Return true if absolute difference is 1. Otherwise, return 0.
+    function bit abs_diff(logic signed [OUTPUT_WIDTH-1:0] expected, 
+                          logic signed [OUTPUT_WIDTH-1:0] got);
+        logic signed [OUTPUT_WIDTH-1:0] diff;
+        diff     = expected - got;
+        abs_diff = (diff == 1 || diff == -1); 
     endfunction
 
     initial begin: monitor
@@ -197,7 +198,7 @@ module fft_ip_tb_top (
                         pass   = pass + 1;
                     end
                     else begin
-                        if(absolute_val(exp_fft_real, fft_real) || absolute_val(exp_fft_imag, fft_imag)) begin
+                        if(abs_diff(exp_fft_real, fft_real) || abs_diff(exp_fft_imag, fft_imag)) begin
                             status = "PASS (CONVERGENT ROUNDING EDGE CASE)";
                             pass   = pass + 1;
                         end
