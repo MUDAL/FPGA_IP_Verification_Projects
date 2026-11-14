@@ -1,15 +1,54 @@
 # FFT IP Core Verification
 Custom verification of the Altera FFT IP Core.
 
-## Generating the Quartus project
+## A. Project file structure
+```
+.
+├── README.md
+├── ip
+│   └── fft_ip.qsys             # Platform Designer FFT IP config file 
+├── scripts                     # Scripts to generate Quartus project
+│   ├── create_project.bat
+│   ├── create_project.sh
+│   └── create_project.tcl
+└── tb
+    ├── fft_ip_tb_top.sv
+    ├── golden_model
+    │   └── testvectors_gen.py
+    ├── sim_top.bat
+    ├── sim_top.sh
+    └── sim_top.tcl
+```
+
+## B. Generating the Quartus project
+
 Use the following commands.
+### 1. Linux  
+```
+cd scripts
+source create_project.sh 
+```
+
+### 2. Windows (PowerShell)  
 ```
 cd scripts
 cmd /c create_project.bat 
 ```
 
-## Running the testbench
+## C. Generating the testbench system
+
+In order to generate the testbench system (HDL files, BFMs, and Tcl scripts), refer to the [P1_FFT_instructions](../docs/P1_FFT_instructions.pdf) document.    
+
+## D. Running the testbench
+
 Use the following commands.
+### 1. Linux  
+```
+cd tb
+source sim_top.sh
+```
+
+### 2. Windows (PowerShell)  
 ```
 cd tb
 cmd /c sim_top.bat
