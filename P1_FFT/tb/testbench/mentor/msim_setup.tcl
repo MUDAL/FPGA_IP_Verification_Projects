@@ -94,7 +94,7 @@
 # within the Quartus project, and generate a unified
 # script which supports all the Altera IP within the design.
 # ----------------------------------------
-# ACDS 18.1 625 win32 2026.11.12.13:23:57
+# ACDS 25.1 1129 linux 2026.11.14.11:27:12
 
 # ----------------------------------------
 # Initialize variables
@@ -113,7 +113,7 @@ if ![info exists QSYS_SIMDIR] {
 }
 
 if ![info exists QUARTUS_INSTALL_DIR] { 
-  set QUARTUS_INSTALL_DIR "C:/intelfpga_lite/18.1/quartus/"
+  set QUARTUS_INSTALL_DIR "/home/olaoluwa/altera_lite/25.1std/quartus/"
 }
 
 if ![info exists USER_DEFINED_COMPILE_OPTIONS] { 
@@ -152,7 +152,7 @@ ensure_lib          ./libraries/
 ensure_lib          ./libraries/work/
 vmap       work     ./libraries/work/
 vmap       work_lib ./libraries/work/
-if ![ string match "*ModelSim ALTERA*" [ vsim -version ] ] {
+if ![ string match "*Altera*FPGA*" [ vsim -version ] ] {
   ensure_lib                       ./libraries/altera_ver/           
   vmap       altera_ver            ./libraries/altera_ver/           
   ensure_lib                       ./libraries/lpm_ver/              
@@ -181,6 +181,8 @@ if ![ string match "*ModelSim ALTERA*" [ vsim -version ] ] {
   vmap       altera_lnsim          ./libraries/altera_lnsim/         
   ensure_lib                       ./libraries/cyclonev/             
   vmap       cyclonev              ./libraries/cyclonev/             
+  ensure_lib                       ./libraries/cyclonev_hssi/        
+  vmap       cyclonev_hssi         ./libraries/cyclonev_hssi/        
 }
 ensure_lib                           ./libraries/altera_common_sv_packages/
 vmap       altera_common_sv_packages ./libraries/altera_common_sv_packages/
@@ -201,7 +203,7 @@ vmap       fft_ip_inst               ./libraries/fft_ip_inst/
 # Compile device library files
 alias dev_com {
   echo "\[exec\] dev_com"
-  if ![ string match "*ModelSim ALTERA*" [ vsim -version ] ] {
+  if ![ string match "*Altera*FPGA*" [ vsim -version ] ] {
     eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QUARTUS_INSTALL_DIR/eda/sim_lib/altera_primitives.v"                     -work altera_ver           
     eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QUARTUS_INSTALL_DIR/eda/sim_lib/220model.v"                              -work lpm_ver              
     eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QUARTUS_INSTALL_DIR/eda/sim_lib/sgate.v"                                 -work sgate_ver            
@@ -231,6 +233,9 @@ alias dev_com {
     eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QUARTUS_INSTALL_DIR/eda/sim_lib/mentor/cyclonev_atoms_ncrypt.v"          -work cyclonev             
     eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QUARTUS_INSTALL_DIR/eda/sim_lib/cyclonev_atoms.vhd"                      -work cyclonev             
     eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QUARTUS_INSTALL_DIR/eda/sim_lib/cyclonev_components.vhd"                 -work cyclonev             
+    eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QUARTUS_INSTALL_DIR/eda/sim_lib/cyclonev_hssi_components.vhd"            -work cyclonev_hssi        
+    eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QUARTUS_INSTALL_DIR/eda/sim_lib/mentor/cyclonev_hssi_atoms_ncrypt.v"     -work cyclonev_hssi        
+    eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QUARTUS_INSTALL_DIR/eda/sim_lib/cyclonev_hssi_atoms.vhd"                 -work cyclonev_hssi        
   }
 }
 
@@ -249,35 +254,35 @@ alias com {
   eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/apn_fft_mult_cpx_1825.v"                                                    -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/apn_fft_mult_cpx.vhd"                                                       -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/hyper_opt_OFF_pkg.vhd"                                                      -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/altera_fft_dual_port_ram.vhd"                                               -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/altera_fft_dual_port_rom.vhd"                                               -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/altera_fft_mult_add.vhd"                                                    -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/altera_fft_single_port_rom.vhd"                                             -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/altera_fft_dual_port_ram.vhd"                                               -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_fft_pkg.vhd"                                                            -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/altera_fft_dual_port_rom.vhd"                                               -work fft_ii_0                 
   eval  vlog $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS     "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/hyper_pipeline_interface.v"                                                 -work fft_ii_0                 
   eval  vlog -sv $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/counter_module.sv"                             -L altera_common_sv_packages -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_lib_pkg.vhd"                                               -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_bit_reverse_addr_control.vhd"                                     -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_bit_reverse_core.vhd"                                             -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_bit_reverse_reverse_carry_adder.vhd"                              -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_adder_fp.vhd"                                              -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_addsub.vhd"                                                -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_bfi.vhd"                                                   -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_bfii.vhd"                                                  -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_bf_control.vhd"                                            -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma.vhd"                                                   -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma_adder_fp.vhd"                                          -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma_bfi_fp.vhd"                                            -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma_fp.vhd"                                                -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_core.vhd"                                                  -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_counter.vhd"                                               -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_delay.vhd"                                                 -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_enable_control.vhd"                                        -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_stage.vhd"                                                 -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_stg_out_pipe.vhd"                                          -work fft_ii_0                 
-  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_stg_pipe.vhd"                                              -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_bit_reverse_core.vhd"                                             -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_top.vhd"                                                   -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_enable_control.vhd"                                        -work fft_ii_0                 
   eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_twrom.vhd"                                                 -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_stage.vhd"                                                 -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma_bfi_fp.vhd"                                            -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_counter.vhd"                                               -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_stg_pipe.vhd"                                              -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_bit_reverse_reverse_carry_adder.vhd"                              -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_addsub.vhd"                                                -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_bf_control.vhd"                                            -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_adder_fp.vhd"                                              -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_bit_reverse_addr_control.vhd"                                     -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_stg_out_pipe.vhd"                                          -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_core.vhd"                                                  -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_bfi.vhd"                                                   -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma_fp.vhd"                                                -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma_adder_fp.vhd"                                          -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_cma.vhd"                                                   -work fft_ii_0                 
+  eval  vcom $USER_DEFINED_VHDL_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS        "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/mentor/auk_dspip_r22sdf_bfii.vhd"                                                  -work fft_ii_0                 
   eval  vlog -sv $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/fft_ip_fft_ii_0.sv"                                   -L altera_common_sv_packages -work fft_ii_0                 
   eval  vlog -sv $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/altera_conduit_bfm_0002.sv"                           -L altera_common_sv_packages -work fft_ip_inst_source_bfm   
   eval  vlog -sv $USER_DEFINED_VERILOG_COMPILE_OPTIONS $USER_DEFINED_COMPILE_OPTIONS "$QSYS_SIMDIR/fft_ip_tb/simulation/submodules/altera_conduit_bfm.sv"                                -L altera_common_sv_packages -work fft_ip_inst_sink_bfm     
@@ -291,14 +296,14 @@ alias com {
 # Elaborate top level design
 alias elab {
   echo "\[exec\] elab"
-  eval vsim -t ps $ELAB_OPTIONS $USER_DEFINED_ELAB_OPTIONS -L work -L work_lib -L altera_common_sv_packages -L fft_ii_0 -L fft_ip_inst_source_bfm -L fft_ip_inst_sink_bfm -L fft_ip_inst_rst_bfm -L fft_ip_inst_clk_bfm -L fft_ip_inst -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L altera -L lpm -L sgate -L altera_mf -L altera_lnsim -L cyclonev $TOP_LEVEL_NAME
+  eval vsim -t ps $ELAB_OPTIONS $USER_DEFINED_ELAB_OPTIONS -L work -L work_lib -L altera_common_sv_packages -L fft_ii_0 -L fft_ip_inst_source_bfm -L fft_ip_inst_sink_bfm -L fft_ip_inst_rst_bfm -L fft_ip_inst_clk_bfm -L fft_ip_inst -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L altera -L lpm -L sgate -L altera_mf -L altera_lnsim -L cyclonev -L cyclonev_hssi $TOP_LEVEL_NAME
 }
 
 # ----------------------------------------
-# Elaborate the top level design with novopt option
+# Elaborate the top level design with -voptargs=+acc option
 alias elab_debug {
   echo "\[exec\] elab_debug"
-  eval vsim -novopt -t ps $ELAB_OPTIONS $USER_DEFINED_ELAB_OPTIONS -L work -L work_lib -L altera_common_sv_packages -L fft_ii_0 -L fft_ip_inst_source_bfm -L fft_ip_inst_sink_bfm -L fft_ip_inst_rst_bfm -L fft_ip_inst_clk_bfm -L fft_ip_inst -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L altera -L lpm -L sgate -L altera_mf -L altera_lnsim -L cyclonev $TOP_LEVEL_NAME
+  eval vsim -voptargs=+acc -t ps $ELAB_OPTIONS $USER_DEFINED_ELAB_OPTIONS -L work -L work_lib -L altera_common_sv_packages -L fft_ii_0 -L fft_ip_inst_source_bfm -L fft_ip_inst_sink_bfm -L fft_ip_inst_rst_bfm -L fft_ip_inst_clk_bfm -L fft_ip_inst -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L altera -L lpm -L sgate -L altera_mf -L altera_lnsim -L cyclonev -L cyclonev_hssi $TOP_LEVEL_NAME
 }
 
 # ----------------------------------------
@@ -310,7 +315,7 @@ alias ld "
 "
 
 # ----------------------------------------
-# Compile all the design files and elaborate the top level design with -novopt
+# Compile all the design files and elaborate the top level design with -voptargs=+acc
 alias ld_debug "
   dev_com
   com
@@ -330,11 +335,11 @@ alias h {
   echo
   echo "elab                                              -- Elaborate top level design"
   echo
-  echo "elab_debug                                        -- Elaborate the top level design with novopt option"
+  echo "elab_debug                                        -- Elaborate the top level design with -voptargs=+acc option"
   echo
   echo "ld                                                -- Compile all the design files and elaborate the top level design"
   echo
-  echo "ld_debug                                          -- Compile all the design files and elaborate the top level design with -novopt"
+  echo "ld_debug                                          -- Compile all the design files and elaborate the top level design with -voptargs=+acc"
   echo
   echo 
   echo

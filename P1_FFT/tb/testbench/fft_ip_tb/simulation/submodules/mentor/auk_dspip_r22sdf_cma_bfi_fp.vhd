@@ -1,721 +1,622 @@
--- (C) 2001-2018 Intel Corporation. All rights reserved.
--- Your use of Intel Corporation's design tools, logic functions and other 
--- software and tools, and its AMPP partner logic functions, and any output 
--- files from any of the foregoing (including device programming or simulation 
--- files), and any associated documentation or information are expressly subject 
--- to the terms and conditions of the Intel Program License Subscription 
--- Agreement, Intel FPGA IP License Agreement, or other applicable 
--- license agreement, including, without limitation, that your use is for the 
--- sole purpose of programming logic devices manufactured by Intel and sold by 
--- Intel or its authorized distributors.  Please refer to the applicable 
--- agreement for further details.
-
-
--------------------------------------------------------------------------
--------------------------------------------------------------------------
---
--- Revision Control Information
---
--- $RCSfile: auk_dspip_r22sdf_cma_bfi_fp.vhd,v $
--- $Source: /cvs/uksw/dsp_cores/FFT/src/rtl/lib/r22sdf/auk_dspip_r22sdf_cma_bfi_fp.vhd,v $
---
--- $Revision: #1 $
--- $Date: 2018/07/18 $
--- Check in by     : $Author: psgswbuild $
--- Author   :  <Author name>
---
--- Project      :  <project name>
---
--- Description : 
---
--- <Brief description of the contents of the file>
--- 
---
--- $Log: auk_dspip_r22sdf_cma_bfi_fp.vhd,v $
--- Revision 1.6.2.1  2007/07/24 08:19:34  kmarks
--- spr 247901 inverse not correctly propagated
---
--- Revision 1.6  2007/07/02 12:23:55  kmarks
--- removed reference to fft_7_2
---
--- Revision 1.5  2007/06/20 16:38:20  kmarks
--- Changed the way that processing is handled - it is more robust.
---
--- Revision 1.4  2007/06/04 08:54:00  kmarks
--- updated the verilog testbench and regression testbench for floating point. Fixed a few bugs in the floating point data path. Added -N/2 to N/2 support for floating pt. Fixed a bug in the fpadd
---
--- Revision 1.3  2007/05/21 16:18:45  kmarks
--- bug fixes - works for N= 64 with bit reversed inputs
---
--- Revision 1.2  2007/05/11 13:29:39  kmarks
--- syntax error
---
--- Revision 1.1  2007/05/11 10:10:03  kmarks
--- Added floating point, untested as yet.
---
--- ALTERA Confidential and Proprietary
--- Copyright 2006 (c) Altera Corporation
--- All rights reserved
---
--------------------------------------------------------------------------
--------------------------------------------------------------------------
-
-
-library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-library work;
-use work.auk_dspip_math_pkg.all;
-
-use work.auk_dspip_r22sdf_lib_pkg.all;
-
-entity auk_dspip_r22sdf_cma_bfi_fp is
-
-  generic (
-    STAGE_g          : natural := 1;
-    DATAWIDTH_g      : natural := 18 + 14;
-    TWIDWIDTH_g      : natural := 18;
-    DELAY_g          : natural := 1;
-    INPUT_FORMAT_g   : string  := "BIT_REVERSED";
-    REPRESENTATION_g : string  := "FIXEDPT";
-    MAX_FFTPTS_g     : natural := 1024;
-    PIPELINE_g       : natural := 0;    -- total pipeline delay
-    CMA_PIPELINE_g   : natural := 0;    -- delay of the cma by iteself
-    NUM_STAGES_g     : natural := 5;
-    GROW_g           : natural := 1     -- 1 grow datawidth
-                                        -- 
-    );
-
-  port (
-    clk          : in  std_logic;
-    reset        : in  std_logic;
-    -- start/stop processing
-    enable       : in  std_logic;
-    in_fftpts    : in  std_logic_vector(log2_ceil(MAX_FFTPTS_g) downto 0);
-    in_radix_2   : in  std_logic;
-    in_sel       : in  std_logic;
-    -- control in and out.
-    in_control   : in  std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-    out_control  : out std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-    -- From the previous stage
-    in_inverse   : in  std_logic;
-    in_sop       : in  std_logic;
-    in_eop       : in  std_logic;
-    in_valid     : in  std_logic;
-    in_real      : in  std_logic_vector(DATAWIDTH_g - 1 downto 0);
-    in_imag      : in  std_logic_vector(DATAWIDTH_g - 1 downto 0);
-    realtwid     : in  std_logic_vector(TWIDWIDTH_g - 1 downto 0);
-    imagtwid     : in  std_logic_vector(TWIDWIDTH_g - 1 downto 0);
-    twidaddr     : out std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-    -- From the delay block
-    del_in_real  : in  std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    del_in_imag  : in  std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    -- To the next stage
-    out_real     : out std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    out_imag     : out std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    -- To the delay block
-    del_out_real : out std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    del_out_imag : out std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    out_inverse  : out std_logic;
-    out_sop      : out std_logic;
-    out_eop      : out std_logic;
-    out_valid    : out std_logic
-
-    );
-
-end entity auk_dspip_r22sdf_cma_bfi_fp;
-
-architecture rtl of auk_dspip_r22sdf_cma_bfi_fp is
-
-  constant NUM_R2_STAGES_c  : natural := log2_ceil(MAX_FFTPTS_g);  --NUM_STAGES_g*2 
-  constant TOTAL_PIPELINE_c : natural := PIPELINE_g + CMA_PIPELINE_g;
-
-  -- _comp signals
-  signal del_in_real_comp : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal del_in_imag_comp : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal in_real_comp     : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal in_imag_comp     : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-
-  -- adder inputs
-  signal adder_in_real_a : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal adder_in_real_b : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal adder_in_imag_a : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal adder_in_imag_b : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-
-  signal cma_real_comp : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal cma_imag_comp : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-
-  -- control signals
-  signal s_sel           : std_logic;
-  signal out_valid_int   : std_logic;
-  signal out_inverse_int : std_logic;
-  signal out_sop_int     : std_logic;
-  signal out_eop_int     : std_logic;
-  signal control         : std_logic_vector(log2_ceil(MAX_FFTPTS_g) -1 downto 0);
-
-  -- delayed signals
-  signal s_sel_d       : std_logic_vector(TOTAL_PIPELINE_c downto 0);
-  signal out_valid_d   : std_logic_vector(TOTAL_PIPELINE_c downto 0);
-  signal out_sop_d     : std_logic_vector(TOTAL_PIPELINE_c downto 0);
-  signal out_inverse_d : std_logic_vector(TOTAL_PIPELINE_c downto 0);
-  signal out_eop_d     : std_logic_vector(TOTAL_PIPELINE_c downto 0);
-
-  -- input signals
-  signal del_in_real_s : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal del_in_imag_s : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-  signal in_real_s     : std_logic_vector(DATAWIDTH_g - 1 downto 0);
-  signal in_imag_s     : std_logic_vector(DATAWIDTH_g - 1 downto 0);
-
-  -- delay the control until the output of the CMA
-  type control_t is array (CMA_PIPELINE_g downto 0) of std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-
-  signal curr_control_d : control_t;
-  signal in_control_tmp : std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-  signal in_sop_d       : std_logic_vector(CMA_PIPELINE_g downto 0);
-  signal in_eop_d       : std_logic_vector(CMA_PIPELINE_g downto 0);
-  signal in_valid_d     : std_logic_vector(CMA_PIPELINE_g downto 0);
-  signal in_inverse_d     : std_logic_vector(CMA_PIPELINE_g downto 0);
-begin
-
-  -- During the butterfly computation the input from the delay block is added/
-  -- subtracted from the input stream. The delay blcok input is simply a
-  -- delayed version of the input, therefore the size of the data in the
-  -- delay block is DATAWIDTH_g, despite the fact that the actual size of
-  -- the delay input is DATAWIDTH_g + GROW_g. The MSb is ignored.
-  gen_control_bit_reverse : if INPUT_FORMAT_g = "BIT_REVERSED" generate
-    s_sel <= (control(NUM_R2_STAGES_c - (STAGE_g*2)));
-  end generate gen_control_bit_reverse;
-
-  --control signals for bfi
-  gen_control_in_order : if INPUT_FORMAT_g = "NATURAL_ORDER" or INPUT_FORMAT_g = "-N/2_to_N/2" generate
-    s_sel <= control(NUM_R2_STAGES_c - (STAGE_g*2 - 1));
-  end generate gen_control_in_order;
-
-
-
-  -- delay s_sel_d by pipeline
-  sel_d_pipeline : process (clk)
-  begin  -- process sel_d_pipeline
-    if rising_edge(clk) then
-      if reset = '1' then
-        s_sel_d <= (others => '0');
-      elsif enable = '1' then
-        s_sel_d(0) <= s_sel;
-        if PIPELINE_g > 0 then
-          for i in PIPELINE_g downto 1 loop
-            s_sel_d(i) <= s_sel_d(i-1);
-          end loop;
-        end if;
-      end if;
-    end if;
-  end process sel_d_pipeline;
-
-
-  -- generate input mux if INPUT_FORMAT_g is -N/2_to_N/2,
-  gen_input_mux : if INPUT_FORMAT_g = "-N/2_to_N/2" and REPRESENTATION_g = "FIXEDPT" generate
-    del_in_real_s <= std_logic_vector(resize(signed(in_real), del_in_real_s'length)) when in_sel = '1' and s_sel = '1' else
-                     del_in_real;
-    del_in_imag_s <= std_logic_vector(resize(signed(in_imag), del_in_imag_s'length)) when in_sel = '1' and s_sel = '1' else
-                     del_in_imag;
-    in_real_s <= del_in_real(in_real_s'length - 1 downto 0) when in_sel = '1' and s_sel = '1' else
-                 in_real;
-    in_imag_s <= del_in_imag(in_imag_s'length - 1 downto 0) when in_sel = '1' and s_sel = '1' else
-                 in_imag;
-  end generate gen_input_mux;
-
-  gen_no_input_mux : if INPUT_FORMAT_g = "NATURAL_ORDER" or INPUT_FORMAT_g = "BIT_REVERSED" or REPRESENTATION_g = "FLOATPT" generate
-    -- mux for floating pt and -N/2_to_N/2 is internal to the cma_fpadder
-    del_in_real_s <= del_in_real;
-    del_in_imag_s <= del_in_imag;
-    in_real_s     <= in_real;
-    in_imag_s     <= in_imag;
-  end generate gen_no_input_mux;
-
-  -----------------------------------------------------------------------------
-  -- PIPELINE DELAY IS GREATER THAN FEEDBACK DELAY (DELAY_g)
-  ----------------------------------------------------------------------------- 
-  generate_delay_less_pipeline : if DELAY_g/2 <= PIPELINE_g + 1 and PIPELINE_g > 0 generate
-    type   delay_reg_t is array (DELAY_g - 1 downto 0) of std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    signal del_in_real_pl_d     : delay_reg_t;
-    signal del_in_imag_pl_d     : delay_reg_t;
-    signal cma_adder_out_real_d : delay_reg_t;
-    signal cma_adder_out_imag_d : delay_reg_t;
-    signal in_real_d            : std_logic_vector(DATAWIDTH_g - 1 downto 0);
-    signal in_imag_d            : std_logic_vector(DATAWIDTH_g - 1 downto 0);
-  begin
-
-    -- register inputs for timing purposes.
-    reg_in_p : process (clk)
-    begin
-      if rising_edge(clk) then
-        if reset = '1' then
-          in_real_d <= (others => '0');
-          in_imag_d <= (others => '0');
-        elsif enable = '1' then
-          in_real_d <= in_real_s;
-          in_imag_d <= in_imag_s;
-        end if;
-      end if;
-    end process reg_in_p;
-
-    -- delay inputs from feedback loop by DELAY_g (offset to in_real_d and in_imag_d)
-    gen_reg_delay_1 : if DELAY_g <= 1 generate
-      reg_del_in_p : process (clk)
-      begin
-        if rising_edge(clk) then
-          if reset = '1' then
-            del_in_imag_pl_d <= (others => (others => '0'));
-            del_in_real_pl_d <= (others => (others => '0'));
-          elsif enable = '1' then
-            del_in_imag_pl_d(0) <= del_in_imag_s;
-            del_in_real_pl_d(0) <= del_in_real_s;
-          end if;  -- end enable
-        end if;  -- clk
-      end process reg_del_in_p;
-    end generate gen_reg_delay_1;
-    gen_delay_gt_1 : if DELAY_g > 1 generate
-      
-      reg_del_in_p : process (clk)
-      begin
-        if rising_edge(clk) then
-          if reset = '1' then
-            del_in_imag_pl_d <= (others => (others => '0'));
-            del_in_real_pl_d <= (others => (others => '0'));
-          elsif enable = '1' then
-            del_in_imag_pl_d(0) <= del_in_imag_s;
-            del_in_real_pl_d(0) <= del_in_real_s;
-            if in_radix_2 = '1' then
-              del_in_imag_pl_d(1) <= del_in_imag_s;
-              del_in_real_pl_d(1) <= del_in_real_s;
-              if DELAY_g > 2 then
-                for i in DELAY_g - 1 downto 2 loop
-                  if i mod 2 = 1 then
-                    del_in_imag_pl_d(i) <= del_in_imag_pl_d(i - 2);
-                    del_in_real_pl_d(i) <= del_in_real_pl_d(i - 2);
-                  end if;
-                end loop;  -- i          
-              end if;
-            else
-              for i in DELAY_g - 1 downto 1 loop
-                del_in_imag_pl_d(i) <= del_in_imag_pl_d(i - 1);
-                del_in_real_pl_d(i) <= del_in_real_pl_d(i - 1);
-              end loop;  -- i 
-            end if;  -- end if radix_2= '1'
-          end if;  -- end enable
-        end if;  -- clk
-      end process reg_del_in_p;
-    end generate gen_delay_gt_1;
-
-    -- delay outputs from adder 1
-    reg_adder_in_p : process (clk)
-    begin
-      if rising_edge(clk) then
-        if reset = '1' then
-          cma_adder_out_real_d <= (others => (others => '0'));
-          cma_adder_out_imag_d <= (others => (others => '0'));
-        elsif enable = '1' then
-          cma_adder_out_real_d(0) <= in_real_comp;
-          cma_adder_out_imag_d(0) <= in_imag_comp;
-          if DELAY_g > 1 then
-            for i in DELAY_g - 1 downto 1 loop
-              cma_adder_out_real_d(i) <= cma_adder_out_real_d(i - 1);
-              cma_adder_out_imag_d(i) <= cma_adder_out_imag_d(i - 1);
-            end loop;  -- i 
-          end if;
-        end if;
-      end if;
-    end process reg_adder_in_p;
-
-
-    -- feedback loop  is supplied with the input always, no mux
-    del_out_real <= std_logic_vector(resize(signed(cma_real_comp), DATAWIDTH_g + GROW_g));
-    del_out_imag <= std_logic_vector(resize(signed(cma_imag_comp), DATAWIDTH_g + GROW_g));
-
-    -- adder inputs
-    adder_in_real_a <= std_logic_vector(resize(signed(del_in_real_pl_d(DELAY_g - 1)), DATAWIDTH_g + GROW_g));
-    adder_in_imag_a <= std_logic_vector(resize(signed(del_in_imag_pl_d(DELAY_g - 1)), DATAWIDTH_g + GROW_g));
-
-    adder_in_real_b <= std_logic_vector(resize(signed(in_real_d), DATAWIDTH_g + GROW_g));
-    adder_in_imag_b <= std_logic_vector(resize(signed(in_imag_d), DATAWIDTH_g + GROW_g));
-
-
-
-    -- outputs
-    reg_out_p : process (clk)
-    begin
-      if rising_edge(clk) then
-        if reset = '1' then
-          out_real <= (others => '0');
-          out_imag <= (others => '0');
-        elsif enable = '1' then
-          if s_sel_d(PIPELINE_g) = '1' then
-            out_real <= std_logic_vector(resize(signed(del_in_real_comp), DATAWIDTH_g + GROW_g));
-            out_imag <= std_logic_vector(resize(signed(del_in_imag_comp), DATAWIDTH_g + GROW_g));
-          else
-            if in_radix_2 = '0' or DELAY_g/2 = 0 then
-              out_real <= std_logic_vector(resize(signed(cma_adder_out_real_d(DELAY_g-1)), DATAWIDTH_g + GROW_g));
-              out_imag <= std_logic_vector(resize(signed(cma_adder_out_imag_d(DELAY_g-1)), DATAWIDTH_g + GROW_g));
-            else
-              out_real <= std_logic_vector(resize(signed(cma_adder_out_real_d(DELAY_g/2-1)), DATAWIDTH_g + GROW_g));
-              out_imag <= std_logic_vector(resize(signed(cma_adder_out_imag_d(DELAY_g/2-1)), DATAWIDTH_g + GROW_g));
-            end if;
-          end if;
-        end if;
-      end if;
-    end process reg_out_p;
-    
-  end generate generate_delay_less_pipeline;
-
------------------------------------------------------------------------------
--- PIPELINE DELAY IS LESS THAN FEEDBACK DELAY (DELAY_g)
------------------------------------------------------------------------------ 
-  generate_delay_gt_pipeline : if DELAY_g/2 > PIPELINE_g + 1 or PIPELINE_g = 0 generate
-    type   delay_reg_grow_t is array (PIPELINE_g downto 0) of std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    type   delay_reg_t is array (PIPELINE_g downto 0) of std_logic_vector(DATAWIDTH_g - 1 downto 0);
-    signal in_real_pl_d : delay_reg_t;
-    signal in_imag_pl_d : delay_reg_t;
-
-    signal del_in_real_pl_d : delay_reg_grow_t;
-    signal del_in_imag_pl_d : delay_reg_grow_t;
-  begin
-
-
-    -- delay inputs from feedback loop by
-    reg_del_in_p : process (clk)
-    begin
-      if rising_edge(clk) then
-        if reset = '1' then
-          del_in_imag_pl_d <= (others => (others => '0'));
-          del_in_real_pl_d <= (others => (others => '0'));
-        elsif enable = '1' then
-          del_in_imag_pl_d(0) <= del_in_imag_s;
-          del_in_real_pl_d(0) <= del_in_real_s;
-          if PIPELINE_g > 0 then
-            for i in PIPELINE_g downto 1 loop
-              del_in_imag_pl_d(i) <= del_in_imag_pl_d(i-1);
-              del_in_real_pl_d(i) <= del_in_real_pl_d(i-1);
-            end loop;  -- i 
-          end if;
-        end if;
-      end if;
-    end process reg_del_in_p;
-
-    -- delay inputs from feedback loop by DELAY_g (offset to in_real_d and in_imag_d)
-    reg_in_pl_p : process (clk)
-    begin
-      if rising_edge(clk) then
-        if reset = '1' then
-          in_imag_pl_d <= (others => (others => '0'));
-          in_real_pl_d <= (others => (others => '0'));
-        elsif enable = '1' then
-          in_imag_pl_d(0) <= in_imag_s;
-          in_real_pl_d(0) <= in_real_s;
-          if PIPELINE_g > 0 then
-            in_real_pl_d(1) <= cma_real_comp;
-            in_imag_pl_d(1) <= cma_imag_comp;
-            for i in PIPELINE_g downto 2 loop
-              in_imag_pl_d(i) <= in_imag_pl_d(i - 1);
-              in_real_pl_d(i) <= in_real_pl_d(i - 1);
-            end loop;  -- i 
-          end if;
-        end if;
-      end if;
-    end process reg_in_pl_p;
-
-    -- output multiplexor, data sent to delay block.
-    del_out_real <= in_real_comp when s_sel_d(PIPELINE_g) = '1' else
-                    std_logic_vector(resize(signed(in_real_pl_d(PIPELINE_g)),
-                                            DATAWIDTH_g + GROW_g));
-
-    del_out_imag <= in_imag_comp when s_sel_d(PIPELINE_g) = '1' else
-                    std_logic_vector(resize(signed(in_imag_pl_d(PIPELINE_g)),
-                                            DATAWIDTH_g + GROW_g));
-
-    -- adder inputs
-    adder_in_real_a <= std_logic_vector(resize(signed(del_in_real_pl_d(0)), DATAWIDTH_g + GROW_g));
-    adder_in_imag_a <= std_logic_vector(resize(signed(del_in_imag_pl_d(0)), DATAWIDTH_g + GROW_g));
-
-    adder_in_real_b <= std_logic_vector(resize(signed(in_real_pl_d(0)), DATAWIDTH_g + GROW_g));
-    adder_in_imag_b <= std_logic_vector(resize(signed(in_imag_pl_d(0)), DATAWIDTH_g + GROW_g));
-
-    -- outputs
-    reg_out_p : process (clk)
-    begin
-      if rising_edge(clk) then
-        if reset = '1' then
-          out_real <= (others => '0');
-          out_imag <= (others => '0');
-        elsif enable = '1' then
-          if s_sel_d(PIPELINE_g) = '1' then
-            out_real <= std_logic_vector(resize(signed(del_in_real_comp), DATAWIDTH_g + GROW_g));
-            out_imag <= std_logic_vector(resize(signed(del_in_imag_comp), DATAWIDTH_g + GROW_g));
-          else
-            out_real <= std_logic_vector(resize(signed(del_in_real_pl_d(PIPELINE_g)), DATAWIDTH_g + GROW_g));
-            out_imag <= std_logic_vector(resize(signed(del_in_imag_pl_d(PIPELINE_g)), DATAWIDTH_g + GROW_g));
-          end if;
-        end if;
-      end if;
-    end process reg_out_p;
-    
-    
-    
-  end generate generate_delay_gt_pipeline;
-
-
-  -----------------------------------------------------------------------------
-  -- ADDERS
-  -----------------------------------------------------------------------------
-  gen_fixedpt_adders : if REPRESENTATION_g = "FIXEDPT" generate
-
-    -- Add/Subtract operations, grow data initially
-    del_in_real_comp_inst : auk_dspip_r22sdf_addsub
-      generic map (
-        DATAWIDTH_g => DATAWIDTH_g +GROW_g,
-        PIPELINE_g  => PIPELINE_g,
-        GROW_g      => 0)
-      port map (
-        clk    => clk,
-        reset  => reset,
-        clken  => enable,
-        add    => '1',
-        dataa  => adder_in_real_a,
-        datab  => adder_in_real_b,
-        result => del_in_real_comp);
-
-    del_in_imag_comp_inst : auk_dspip_r22sdf_addsub
-      generic map (
-        DATAWIDTH_g => DATAWIDTH_g +GROW_g,
-        PIPELINE_g  => PIPELINE_g,
-        GROW_g      => 0)
-      port map (
-        clk    => clk,
-        reset  => reset,
-        clken  => enable,
-        add    => '1',
-        dataa  => adder_in_imag_a,
-        datab  => adder_in_imag_b,
-        result => del_in_imag_comp);
-
-
-    in_real_comp_inst : auk_dspip_r22sdf_addsub
-      generic map (
-        DATAWIDTH_g => DATAWIDTH_g +GROW_g,
-        PIPELINE_g  => PIPELINE_g,
-        GROW_g      => 0)
-      port map (
-        clk    => clk,
-        reset  => reset,
-        clken  => enable,
-        add    => '0',
-        dataa  => adder_in_real_a,
-        datab  => adder_in_real_b,
-        result => in_real_comp);
-
-    in_imag_comp_inst : auk_dspip_r22sdf_addsub
-      generic map (
-        DATAWIDTH_g => DATAWIDTH_g +GROW_g,
-        PIPELINE_g  => PIPELINE_g,
-        GROW_g      => 0)
-      port map (
-        clk    => clk,
-        reset  => reset,
-        clken  => enable,
-        add    => '0',
-        dataa  => adder_in_imag_a,
-        datab  => adder_in_imag_b,
-        result => in_imag_comp);
-  end generate gen_fixedpt_adders;
-
-  -- generate floating point adders
-  gen_floatpt_adders : if REPRESENTATION_g = "FLOATPT" generate
-    -- adder inputs
-    signal adder_in_real_b_d : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    signal adder_in_imag_b_d : std_logic_vector(DATAWIDTH_g + GROW_g - 1 downto 0);
-    function use_input_mux return natural is
-    begin
-      if INPUT_FORMAT_g = "-N/2_to_N/2" then
-        return 1;
-      else
-        return 0;
-      end if;
-    end function use_input_mux;
-
-    signal input_mux_ctrl : std_logic;
-  begin
-
-    -- delay data to align with twiddles
-    delay_data : process (clk)
-    begin  -- process delay_data
-      if rising_edge(clk) then
-        if reset = '1' then
-          adder_in_real_b_d <= (others => '0');
-          adder_in_imag_b_d <= (others => '0');
-        elsif enable = '1' then
-          adder_in_real_b_d <= adder_in_real_b;
-          adder_in_imag_b_d <= adder_in_imag_b;
-        end if;
-      end if;
-    end process delay_data;
-    input_mux_ctrl <= in_sel and s_sel when INPUT_FORMAT_g = "-N/2_to_N/2" else
-                      '0';
-    bfi_cma_fpadder_inst : auk_dspip_r22sdf_cma_adder_fp
-      generic map (
-        INPUT_MUX_CONTROL_g => use_input_mux)
-      port map (
-        sysclk         => clk,
-        reset          => reset,
-        enable         => enable,
-        input_mux_ctrl => input_mux_ctrl,
-        realin         => adder_in_real_b_d,
-        imagin         => adder_in_imag_b_d,
-        realin_d       => adder_in_real_a,
-        imagin_d       => adder_in_imag_a,
-        realtwid       => realtwid,
-        imagtwid       => imagtwid,
-        cma_real_out   => cma_real_comp,
-        cma_imag_out   => cma_imag_comp,
-        realout        => del_in_real_comp,  --in_real_comp,
-        imagout        => del_in_imag_comp,  --in_imag_comp,
-        realout_d      => in_real_comp,      --del_in_real_comp,
-        imagout_d      => in_imag_comp       --del_in_imag_comp
-        );
-
-  end generate gen_floatpt_adders;
-
-
-  -----------------------------------------------------------------------------
-  -- OUTPUTS
-  -----------------------------------------------------------------------------
-  -- register the control signals to align with the data
-  gen_outvalid_p : process (clk)
-  begin
-    if rising_edge(clk) then
-      if reset = '1' then
-        out_valid_d <= (others => '0');
-        out_valid   <= '0';
-      elsif enable = '1' then
-        out_valid      <= out_valid_d(PIPELINE_g);
-        out_valid_d(0) <= out_valid_int;
-        if PIPELINE_g > 0 then
-          for i in PIPELINE_g downto 1 loop
-            out_valid_d(i) <= out_valid_d(i-1);
-          end loop;
-        end if;
-      end if;
-    end if;
-  end process gen_outvalid_p;
-
-  -- delay the  control by CMA_PIPELINE_g
-  gen_delay_control : process (clk)
-  begin  -- process gen_delay_control
-    if rising_edge(clk) then
-      if reset = '1' then
-        curr_control_d <= (others => (others => '0'));
-        in_sop_d       <= (others => '0');
-        in_eop_d       <= (others => '0');
-        in_valid_d     <= (others => '0');
-        in_inverse_d     <= (others => '0');
-      elsif enable = '1' then
-        curr_control_d(0) <= in_control;
-        in_valid_d(0)     <= in_valid;
-        in_inverse_d(0)   <= in_inverse;
-        in_sop_d(0)       <= in_sop;
-        in_eop_d(0)       <= in_eop;
-        for i in CMA_PIPELINE_g downto 1 loop
-          curr_control_d(i) <= curr_control_d(i-1);
-          in_valid_d(i)     <= in_valid_d(i-1);
-          in_inverse_d(i)   <=  in_inverse_d(i-1);
-          in_sop_d(i)       <= in_sop_d(i-1);
-          in_eop_d(i)       <= in_eop_d(i-1);
-        end loop;
-      end if;
-    end if;
-  end process gen_delay_control;
-
--- register the control signals to align with the data
-  gen_eopsop_p : process (clk)
-  begin
-    if rising_edge(clk) then
-      if reset = '1' then
-        if PIPELINE_g > 0 then
-          out_inverse_d <= (others => '0');
-          out_sop_d     <= (others => '0');
-          out_eop_d     <= (others => '0');
-        end if;
-        out_inverse <= '0';
-        out_sop     <= '0';
-        out_eop     <= '0';
-      elsif enable = '1' then
-        if PIPELINE_g > 0 then
-          out_sop_d(0)     <= out_sop_int;
-          out_eop_d(0)     <= out_eop_int;
-          out_inverse_d(0) <= out_inverse_int;
-          for i in PIPELINE_g downto 1 loop
-            out_inverse_d(i) <= out_inverse_d(i-1);
-            out_sop_d(i)     <= out_sop_d(i-1);
-            out_eop_d(i)     <= out_eop_d(i-1);
-          end loop;
-          out_inverse <= out_inverse_d(PIPELINE_g-1);
-          out_sop     <= out_sop_d(PIPELINE_g-1);
-          out_eop     <= out_eop_d(PIPELINE_g-1);
-        else
-          out_inverse <= out_inverse_int;
-          out_sop     <= out_sop_int;
-          out_eop     <= out_eop_int;
-        end if;
-      end if;
-    end if;
-  end process gen_eopsop_p;
-
-
-  -----------------------------------------------------------------------------
-  -- control
-  -----------------------------------------------------------------------------
-
-  in_control_tmp <= std_logic_vector(unsigned(in_control) + 1) when in_radix_2 = '0' else
-                    std_logic_vector(unsigned(in_control) + 2);
-  bf_counter_inst : auk_dspip_r22sdf_counter
-    generic map (
-      MAX_FFTPTS_g   => MAX_FFTPTS_g,
-      INPUT_FORMAT_g => INPUT_FORMAT_g)
-    port map (
-      clk         => clk,
-      reset       => reset,
-      -- start/stop processing
-      enable      => enable,
-      in_sop      => in_sop,
-      in_eop      => in_eop,
-      in_valid    => in_valid,
-      --number of points in the fft
-      in_fftpts   => in_fftpts,
-      in_radix_2  => in_radix_2,
-      in_control  => in_control_tmp,
-      -- array of control signals to the stages.
-      out_control => twidaddr);     
-  bf_control_inst : auk_dspip_r22sdf_bf_control
-    generic map (
-      MAX_FFTPTS_g   => MAX_FFTPTS_g,
-      INPUT_FORMAT_g => INPUT_FORMAT_g,
-      DELAY_g        => DELAY_g)
-    port map (
-      clk          => clk,
-      reset        => reset,
-      enable       => enable,
-      in_fftpts    => in_fftpts,
-      in_radix_2   => in_radix_2,
-      s_s          => s_sel,
-      in_valid     => in_valid_d(CMA_PIPELINE_g),
-      in_inverse   => in_inverse_d(CMA_PIPELINE_g),
-      in_sop       => in_sop_d(CMA_PIPELINE_g),
-      in_eop       => in_eop_d(CMA_PIPELINE_g),
-      in_control   => curr_control_d(CMA_PIPELINE_g),
-      curr_control => control,
-      out_control  => out_control,
-      out_inverse  => out_inverse_int,
-      out_sop      => out_sop_int,
-      out_eop      => out_eop_int,
-      out_valid    => out_valid_int);
-
-
-
-end architecture rtl;
+-- (C) 2001-2025 Altera Corporation. All rights reserved.
+-- This simulation model contains highly confidential and
+-- proprietary information of Altera and is being provided
+-- in accordance with and subject to the protections of the
+-- applicable Altera Program License Subscription Agreement
+-- which governs its use and disclosure. Your use of Altera
+-- Corporation's design tools, logic functions and other
+-- software and tools, and its AMPP partner logic functions,
+-- and any output files from any of the foregoing (including device
+-- programming or simulation files), and any associated
+-- documentation or information are expressly subject to the
+-- terms and conditions of the Altera Program License Subscription
+-- Agreement, Altera IP License Agreement, or other
+-- applicable license agreement, including, without limitation,
+-- that your use is for the sole purpose of simulating designs
+-- for use exclusively in logic devices manufactured by Altera and sold
+-- by Altera or its authorized distributors. Please refer to the
+-- applicable agreement for further details. Altera products and
+-- services are protected under numerous U.S. and foreign patents,
+-- maskwork rights, copyrights and other intellectual property laws.
+-- Altera assumes no responsibility or liability arising out of the
+-- application or use of this simulation model.
+-- ACDS 25.1
+`protect BEGIN_PROTECTED
+`protect version = 1
+`protect author = "Altera"
+`protect encrypt_agent = "ModelSim", encrypt_agent_info = "10.4d"
+`protect key_keyowner = "Mentor Graphics Corporation" , key_keyname = "MGC-VERIF-SIM-RSA-1" , key_method = "rsa"
+`protect encoding = (enctype = "base64", line_length = 64, bytes = 128)
+`protect KEY_BLOCK
+Z0nf1U+KEu/HEUNdQH36lbeXsocC+57La8p9LBVPGXk3aAogFXobqdxUj84CNJEF
+FnR2PUOp6lcTFkrudo76miNUILYQdO9uysG5v2aL8FrFPbNAQwLyk2z5M15hiEh6
+bZgr822/3GpjXvCqqI8W7//KOMDlULEbHfXKjNtG3b8=
+`protect data_method = "aes128-cbc"
+`protect encoding = (enctype = "base64", line_length = 64, bytes = 27995)
+
+`protect DATA_BLOCK
+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
+`protect END_PROTECTED

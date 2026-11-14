@@ -6,7 +6,7 @@
    version="1.0"
    description=""
    tags="INTERNAL_COMPONENT=true"
-   categories="" />
+   categories="System" />
  <parameter name="bonusData"><![CDATA[bonusData 
 {
    element fft_ii_0
@@ -68,7 +68,7 @@
  <module
    name="fft_ii_0"
    kind="altera_fft_ii"
-   version="18.1"
+   version="25.1"
    enabled="1"
    autoexport="1">
   <parameter name="data_flow" value="Variable Streaming" />

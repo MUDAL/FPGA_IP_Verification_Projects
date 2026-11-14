@@ -1,106 +1,106 @@
--- (C) 2001-2018 Intel Corporation. All rights reserved.
--- Your use of Intel Corporation's design tools, logic functions and other 
--- software and tools, and its AMPP partner logic functions, and any output 
--- files from any of the foregoing (including device programming or simulation 
--- files), and any associated documentation or information are expressly subject 
--- to the terms and conditions of the Intel Program License Subscription 
--- Agreement, Intel FPGA IP License Agreement, or other applicable 
--- license agreement, including, without limitation, that your use is for the 
--- sole purpose of programming logic devices manufactured by Intel and sold by 
--- Intel or its authorized distributors.  Please refer to the applicable 
--- agreement for further details.
+-- (C) 2001-2025 Altera Corporation. All rights reserved.
+-- This simulation model contains highly confidential and
+-- proprietary information of Altera and is being provided
+-- in accordance with and subject to the protections of the
+-- applicable Altera Program License Subscription Agreement
+-- which governs its use and disclosure. Your use of Altera
+-- Corporation's design tools, logic functions and other
+-- software and tools, and its AMPP partner logic functions,
+-- and any output files from any of the foregoing (including device
+-- programming or simulation files), and any associated
+-- documentation or information are expressly subject to the
+-- terms and conditions of the Altera Program License Subscription
+-- Agreement, Altera IP License Agreement, or other
+-- applicable license agreement, including, without limitation,
+-- that your use is for the sole purpose of simulating designs
+-- for use exclusively in logic devices manufactured by Altera and sold
+-- by Altera or its authorized distributors. Please refer to the
+-- applicable agreement for further details. Altera products and
+-- services are protected under numerous U.S. and foreign patents,
+-- maskwork rights, copyrights and other intellectual property laws.
+-- Altera assumes no responsibility or liability arising out of the
+-- application or use of this simulation model.
+-- ACDS 25.1
+`protect BEGIN_PROTECTED
+`protect version = 1
+`protect author = "Altera"
+`protect encrypt_agent = "ModelSim", encrypt_agent_info = "10.4d"
+`protect key_keyowner = "Mentor Graphics Corporation" , key_keyname = "MGC-VERIF-SIM-RSA-1" , key_method = "rsa"
+`protect encoding = (enctype = "base64", line_length = 64, bytes = 128)
+`protect KEY_BLOCK
+SVsS9ngQ3UwAulT1Rz7Ed0EheWUHXv1nkjSlNW9/3tWxuWFVJbf0p8lYefzZwIM/
+QbJnyXPLGElnnWz525TEYnjF02OnhOXAgJ0BuQL1aYgfcJQ08O1Q6uu5XLcMaYFj
+Lz+gpU+CmGAtiPDzbab+S2REo4Aow0LbVoWMSjg9R90=
+`protect data_method = "aes128-cbc"
+`protect encoding = (enctype = "base64", line_length = 64, bytes = 3203)
 
-
--------------------------------------------------------------------------
--------------------------------------------------------------------------
---
--- Revision Control Information
---
--- $RCSfile: $
--- $Source: $
---
--- $Revision: #1 $
--- $Date: 2018/07/18 $
--- Check in by     : $Author: psgswbuild $
--- Author   :  kmarks
---
--- Project      :  auk_dspip_lib
---
--- Description : 
---
--- reverse carry propagation adder. 
---   a(3)+-----+
---  ---->|  1  |----> sum(3)
---   b(3)| bit |
---  ---->| add |---+ cout(3)
---       +-----+   |
---                 |
---          +------+
---          |cin(2)
---          v
---   a(2)+-----+
---  ---->|  1  |----> sum(2)
---   b(2)| bit |
---  ---->| add |---+ cout(2)
---       +-----+   |
---                 |
---          +------+
---          |cin(1)
---          v
---   a(1)+-----+
---  ---->|  1  |----> sum(1)
---   b(1)| bit |
---  ---->| add |---+ cout(1)
---       +-----+   |
---                 |
---          +------+
---          |cin(0)
---          v
---   a(0)+-----+
---  ---->|  1  |----> sum(0)
---   b(0)| bit |
---  ---->| add |
---       +-----+   
-
--- 
--- $Log: $
--- ALTERA Confidential and Proprietary
--- Copyright 2006 (c) Altera Corporation
--- All rights reserved
---
--------------------------------------------------------------------------
--------------------------------------------------------------------------
-library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-
-entity auk_dspip_bit_reverse_reverse_carry_adder is
-  generic (
-    MAX_SIZE_g : natural := 9);
-  port (
-    clk     : in  std_logic;
-    reset   : in  std_logic;
-    add_a   : in  std_logic_vector(MAX_SIZE_g - 1 downto 0);
-    add_b   : in  std_logic_vector(MAX_SIZE_g - 1 downto 0);
-    sum_out : out std_logic_vector(MAX_SIZE_g - 1 downto 0));
-end entity auk_dspip_bit_reverse_reverse_carry_adder;
-
-
-architecture rtl of auk_dspip_bit_reverse_reverse_carry_adder is
-  signal cout : std_logic_vector(MAX_SIZE_g  downto 0);
-  
-begin  -- architecture rtl
-
-  -- connect 1 bit adders with carry out connected to previous carry in
-  cout(MAX_SIZE_g) <= '0';
-  
-  gen_adder: for i in MAX_SIZE_g - 1 downto 0 generate
-    sum_out(i) <=  add_a(i) xor add_b(i) xor cout(i+1);
-    -- cout 1 if majority of inputs are 1
-    cout(i) <= (add_a(i) and add_b(i)) or
-               (add_a(i) and cout(i+1)) or
-               (add_b(i) and cout(i+1));
-  end generate gen_adder;
-  
-  
-end architecture rtl;
+`protect DATA_BLOCK
+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
+ckfMX1Rw0xdmp6oaCUHDCw==
+`protect END_PROTECTED

@@ -1,19 +1,19 @@
-// (C) 2001-2018 Intel Corporation. All rights reserved.
-// Your use of Intel Corporation's design tools, logic functions and other 
+// (C) 2001-2025 Altera Corporation. All rights reserved.
+// Your use of Altera Corporation's design tools, logic functions and other 
 // software and tools, and its AMPP partner logic functions, and any output 
 // files from any of the foregoing (including device programming or simulation 
 // files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Intel Program License Subscription 
-// Agreement, Intel FPGA IP License Agreement, or other applicable 
+// to the terms and conditions of the Altera Program License Subscription 
+// Agreement, Altera IP License Agreement, or other applicable 
 // license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Intel and sold by 
-// Intel or its authorized distributors.  Please refer to the applicable 
+// sole purpose of programming logic devices manufactured by Altera and sold by 
+// Altera or its authorized distributors.  Please refer to the applicable 
 // agreement for further details.
 
 
-// $File: //acds/rel/18.1std/ip/sopc/components/verification/altera_avalon_reset_source/altera_avalon_reset_source.sv $
+// $File: //acds/rel/25.1std/ip/sopc/components/verification/altera_avalon_reset_source/altera_avalon_reset_source.sv $
 // $Revision: #1 $
-// $Date: 2018/07/18 $
+// $Date: 2025/03/10 $
 // $Author: psgswbuild $
 //------------------------------------------------------------------------------
 // Reset generator
@@ -53,7 +53,7 @@ module altera_avalon_reset_source (
       print(VERBOSITY_INFO, message);            
       $sformat(message, "%m: -   $Revision: #1 $");
       print(VERBOSITY_INFO, message);            
-      $sformat(message, "%m: -   $Date: 2018/07/18 $");
+      $sformat(message, "%m: -   $Date: 2025/03/10 $");
       print(VERBOSITY_INFO, message);
       $sformat(message, "%m: -   ASSERT_HIGH_RESET = %0d", ASSERT_HIGH_RESET);      
       print(VERBOSITY_INFO, message);
@@ -65,7 +65,7 @@ module altera_avalon_reset_source (
    function automatic string get_version();  // public
       // Return BFM version as a string of three integers separated by periods.
       // For example, version 9.1 sp1 is encoded as "9.1.1".      
-      string ret_version = "18.1";
+      string ret_version = "25.1";
       return ret_version;
    endfunction
    

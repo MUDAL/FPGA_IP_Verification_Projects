@@ -1,737 +1,617 @@
--- (C) 2001-2018 Intel Corporation. All rights reserved.
--- Your use of Intel Corporation's design tools, logic functions and other 
--- software and tools, and its AMPP partner logic functions, and any output 
--- files from any of the foregoing (including device programming or simulation 
--- files), and any associated documentation or information are expressly subject 
--- to the terms and conditions of the Intel Program License Subscription 
--- Agreement, Intel FPGA IP License Agreement, or other applicable 
--- license agreement, including, without limitation, that your use is for the 
--- sole purpose of programming logic devices manufactured by Intel and sold by 
--- Intel or its authorized distributors.  Please refer to the applicable 
--- agreement for further details.
-
-
--------------------------------------------------------------------------
--------------------------------------------------------------------------
---
--- Revision Control Information
---
--- $RCSfile: auk_dspip_r22sdf_core.vhd,v $
--- $Source: /cvs/uksw/dsp_cores/FFT/src/rtl/lib/r22sdf/auk_dspip_r22sdf_core.vhd,v $
---
--- $Revision: #1 $
--- $Date: 2018/07/18 $
--- Check in by     : $Author: psgswbuild $
--- Author   :  <Author name>
---
--- Project      :  <project name>
---
--- Description : 
---
--- Calculates the FFT of an "fftpts" size data stream 
---
--- To faciliate a top level that can be configured for any length FFT
--- without changing this file, all data inputs and outputs are resized at
--- the input and output ports of the stage to be the maximum datawidth (ie
--- DATAWIDTH_c + MAX_GROW_c). The synthesiser removes the extra logic very
--- efficiently (in fact the results are better using this method than
--- explicitly declaring each stage).
--- All constants used in this file are contained within r22sdf_pkg. This
--- means that this file can be used without change and the number of stages
--- can be increased or decreased by changing the values of the constnats
--- in the package.
-
---
--- $Log: auk_dspip_r22sdf_core.vhd,v $
--- Revision 1.17  2007/07/04 11:44:25  kmarks
--- syntax error. ops
---
--- Revision 1.16  2007/07/03 19:16:00  kmarks
--- handle the data growth better
---
--- Revision 1.15  2007/06/28 16:44:51  kmarks
--- Changed prune to cma_out_datawidth - I think it is clearer what it means.
---
--- Revision 1.14  2007/06/28 14:00:05  kmarks
--- prune should only be NUM_STAGES_g   -1 long (first stage doesnt have Complex multiplier)
---
--- Revision 1.13  2007/06/28 13:48:22  kmarks
--- added pruning infrastructure
---
--- Revision 1.12  2007/05/21 16:18:45  kmarks
--- bug fixes - works for N= 64 with bit reversed inputs
---
--- Revision 1.11  2007/05/11 10:10:03  kmarks
--- Added floating point, untested as yet.
---
--- Revision 1.10  2007/05/04 08:19:37  kmarks
--- working after rearranging stage to have multiplication first.
---
--- Revision 1.9  2007/02/07 14:46:15  kmarks
--- added dynamic inverse testing and fixed the inverse fft bug.
---
--- Revision 1.8  2007/01/25 12:38:50  kmarks
--- added bit reversal optimisations
---
--- Revision 1.7  2007/01/12 13:31:15  kmarks
--- add OPTIMIZE_MEM_g and optimized twiddle rom instantiation.
---
--- Revision 1.6  2006/12/19 18:07:30  kmarks
--- Updated to make use of the rounding in the stratix III DSP block.
---
--- Revision 1.5  2006/12/05 10:54:43  kmarks
--- updated from the 6.1 branch
---
--- Revision 1.4.2.1  2006/09/28 16:47:29  kmarks
--- fmax improvements SPR 219316
---
--- Revision 1.4  2006/09/06 14:39:39  kmarks
--- added global clock enable and error ports to atlantic interfaces. Added checkbox on GUI for Global clock enable . Some bug fixed for the new architecture.
---
--- Revision 1.3  2006/08/24 12:49:27  kmarks
--- various bug fixes and added bit reversal.
---
--- Revision 1.2  2006/08/14 12:08:35  kmarks
--- *** empty log message ***
---
--- ALTERA Confidential and Proprietary
--- Copyright 2006 (c) Altera Corporation
--- All rights reserved
---
--------------------------------------------------------------------------
-
-
-library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use ieee.math_real.all;
-
-library work;
-use work.auk_dspip_math_pkg.all;
-use work.auk_dspip_text_pkg.all;
-
-use work.auk_dspip_r22sdf_lib_pkg.all;
-
-
-entity auk_dspip_r22sdf_core is
-
-  generic (
-    DEVICE_FAMILY_g   : string; 
-    DATAWIDTH_g       : natural := 18;
-    TWIDWIDTH_g       : natural := 18;
-    MAX_FFTPTS_g      : natural := 1024;
-    NUM_STAGES_g      : natural := 5;
-    MAX_GROW_g        : natural := 14;
-    PIPELINE_g        : natural := 0;
-    DSP_ROUNDING_g    : natural := 1;
-    OPTIMIZE_MEM_g    : natural := 1;
-    DEBUG_g           : natural := 0;
-    PRUNE_g        : string  := "3 2 1 0";
-    INPUT_FORMAT_g    : string  := "NATURAL_ORDER";
-    REPRESENTATION_g  : string  := "FIXEDPT";
-    DSP_ARCH_g        : natural := 0;
-    TWIDROM_BASE_g    : string  := "../tb/"
-    );
-  port (
-    clk           : in  std_logic;
-    reset         : in  std_logic;
-    enable        : in  std_logic;
-    in_sop        : in  std_logic;
-    in_eop        : in  std_logic;
-    in_fftpts     : in  std_logic_vector(log2_ceil(MAX_FFTPTS_g) downto 0);
-    in_pwr_2      : in  std_logic;
-    in_valid      : in  std_logic;
-    in_inverse    : in  std_logic;
-    stg_input_sel : in  std_logic_vector(NUM_STAGES_g - 1 downto 0);
-    in_real       : in  std_logic_vector(DATAWIDTH_g - 1 downto 0);
-    in_imag       : in  std_logic_vector(DATAWIDTH_g - 1 downto 0);
-    processing    : out std_logic;
-    out_stall     : in  std_logic;
-    out_real      : out std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-    out_imag      : out std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-    out_sop       : out std_logic;
-    out_eop       : out std_logic;
-    out_valid     : out std_logic
-    );
-
-end entity auk_dspip_r22sdf_core;
-
-
-architecture rtl of auk_dspip_r22sdf_core is
-
-  constant MAX_PWR_2_c : natural := log2_ceil(MAX_FFTPTS_g)rem 2;
-
-  -- array types
-  type data_array_t is array (NUM_STAGES_g - 1 downto 0) of
-    std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-
-  type twid_array_t is array (NUM_STAGES_g - 1 downto 0) of
-    std_logic_vector(TWIDWIDTH_g - 1 downto 0);
-
-  type control_array_t is array (NUM_STAGES_g - 1 downto 0) of
-    std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-
-  signal stg_in_real  : data_array_t;
-  signal stg_in_imag  : data_array_t;
-  signal stg_out_real : data_array_t;
-  signal stg_out_imag : data_array_t;
-
-  signal stg_in_control  : control_array_t;
-  signal stg_out_control : control_array_t;
-  signal stg_twidaddr    : control_array_t;
-
-  signal stg_realtwid : twid_array_t;
-  signal stg_imagtwid : twid_array_t;
-
-  signal stg_in_valid    : std_logic_vector(NUM_STAGES_g- 1 downto 0);
-  signal stg_in_inverse  : std_logic_vector(NUM_STAGES_g- 1 downto 0);
-  signal stg_in_sop      : std_logic_vector(NUM_STAGES_g- 1 downto 0);
-  signal stg_in_eop      : std_logic_vector(NUM_STAGES_g- 1 downto 0);
-  signal stg_out_valid   : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-  signal stg_out_inverse : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-  signal stg_out_sop     : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-  signal stg_out_eop     : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-  signal stg_twid_rd_en  : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-  -- indicates that a stage is processing incoming data
-  signal stg_processing  : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-
-  signal in_enable         : std_logic;
-  signal control_enable    : std_logic;
-  signal stg_in_real_first : std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-  signal stg_in_imag_first : std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-  signal stg_control_first : std_logic_vector(log2_ceil(MAX_FFTPTS_g) - 1 downto 0);
-
-  -- inverse control
-  signal in_real_inv : std_logic_vector(DATAWIDTH_g - 1 downto 0);
-  signal in_imag_inv : std_logic_vector(DATAWIDTH_g - 1 downto 0);
-
-  constant TWID_DELAY_c : natural := 3;
-  type     twid_delay_t is array (NUM_STAGES_g - 1 downto 0) of
-    std_logic_vector(TWID_DELAY_c -1 downto 0);
-  signal twid_rd_en_d : twid_delay_t;
-
-
-  signal difference  : std_logic_vector(NUM_STAGES_g - 1 downto 0);
-  signal out_inverse : std_logic;
-
-  function get_prune_array return array_natural_t is
-    variable prune_v : array_natural_t(0 to NUM_STAGES_g - 1);
-  begin
-    prune_v(0 to NUM_STAGES_g -1) := parse_string_array(PRUNE_g, NUM_STAGES_g);
-    return prune_v;
-  end function get_prune_array;
-
-  constant prune_array : array_natural_t := get_prune_array;
-
-
-
-
-  function getDatawidths (index : natural)
-    return array_natural_t is
-    variable stage_datawidths_v : array_natural_t(NUM_STAGES_g -1 downto 0);  -- actual stage datawidth
-                                                    -- at input to stage
-    variable grow_v             : array_natural_t(NUM_STAGES_g -1 downto 0);  -- how many bits the stage should grow
-    variable cma_grow_v         : array_natural_t(NUM_STAGES_g -1 downto 0);  -- how many bits the cma should grow
-    variable prune_array_v      : array_natural_t(NUM_STAGES_g -1 downto 0);
-  begin  -- function getDatawidths
-    
-
-    for i in 0 to NUM_STAGES_g - 1 loop
-
-      if REPRESENTATION_g = "FIXEDPT" then -- in the case of fixed point data, calculate the data width
-      
-        prune_array_v := get_prune_array;
-
-        --------------------------------------
-        -- Odd & Even number of stages, pwr 4
-        --------------------------------------
-        -- Second stage always grows 3, otherwise 2.
-        if ((MAX_PWR_2_c = 0)) then
-          if (i = 1) then
-            grow_v(i)     := 3;
-            cma_grow_v(i) := 1;
-          else
-            grow_v(i)     := 2;
-            cma_grow_v(i) := 0;
-          end if;
-
-        --------------------------------------
-        -- Odd & Even number of stages, pwr 2
-        --------------------------------------
-        else
-          if (INPUT_FORMAT_g = "NATURAL_ORDER" or INPUT_FORMAT_g = "-N/2_to_N/2") then
-            -- Natural order : Second stage always grows 3, last stage (radix 2) grows 1, otherwise 2.
-            if (i = 1) then
-              grow_v(i)     := 3;
-              cma_grow_v(i) := 1;
-            else
-              cma_grow_v(i) := 0;
-              if (i = NUM_STAGES_g-1) then
-                grow_v(i) := 1;
-              else
-                grow_v(i) := 2;
-              end if;
-            end if;
-          else
-            -- Bit reversed order: First stage grows 1, second stage grows 3, otherwise 2.
-            if (i = 0) then
-              grow_v(i)     := 1;
-              cma_grow_v(i) := 0;
-            elsif (i = 1) then
-              grow_v(i)     := 3;
-              cma_grow_v(i) := 1;
-            else
-              grow_v(i)     := 2;
-              cma_grow_v(i) := 0;
-            end if;
-          end if;
-        end if;
-
-
-        
-        -- prune the cma_grow array
-        -- cma_grow_v(i) := cma_grow_v(i) - prune_array_v(i);
-
-        if (i = 0) then
-          stage_datawidths_v(0) := DATAWIDTH_g;
-        else
-          stage_datawidths_v(i) := stage_datawidths_v(i - 1) + grow_v(i - 1) - prune_array_v(i);
-        end if;
-        
-
-      else -- in the case of floating point data, no need to change data width between stages
-        grow_v(i)     := 0;
-        cma_grow_v(i) := 0;
-        stage_datawidths_v(i) := 32;
-
-      end if;
-
-
-      
-      
-    end loop;  -- i
-
-    if index = 0 then
-      return stage_datawidths_v;
-    else
-      return cma_grow_v;
-    end if;
-
-  end function getDatawidths;
-
-  constant stage_datawidth_array : array_natural_t := getDatawidths(0);
-  constant cma_grow_array : array_natural_t := getDatawidths(1);
-
-
-begin  -- architecture r22sdf_rtl
-
-
-  -- enable controller
-  ena_ctrl : auk_dspip_r22sdf_enable_control
-    generic map (
-      NUM_STAGES_g => NUM_STAGES_g,
-      MAX_FFTPTS_g => MAX_FFTPTS_g)
-    port map (
-      clk         => clk,
-      reset       => reset,
-      enable      => enable,
-      stall       => out_stall,
-      in_sop      => in_sop,
-      in_eop      => in_eop,
-      in_fftpts   => in_fftpts,
-      in_pwr_2    => in_pwr_2,
-      out_enable  => in_enable,
-      out_control => open);
-
-  control_enable <= in_enable;
-
-  processing <= or_reduce(stg_processing);
-
-
-  -- swap inputs on inverse
-  in_real_inv <= in_real when in_inverse = '0' else
-                 in_imag;
-  in_imag_inv <= in_imag when in_inverse = '0' else
-                 in_real;
-
-  -- assign input to first stage
-  stg_in_real_first <= std_logic_vector(resize(signed(in_real_inv), DATAWIDTH_g + MAX_GROW_g));
-  stg_in_imag_first <= std_logic_vector(resize(signed(in_imag_inv), DATAWIDTH_g + MAX_GROW_g));
-
-  stg_control_first <= (others => '0');
-  -- assign twiddles to first stage (twiddles are 0)
-  stg_realtwid(0)   <= (others => '0');
-  stg_imagtwid(0)   <= (others => '0');
-
-
-  -----------------------------------------------------------------------------
-  -- NATURAL ORDER INPUTS
-  -----------------------------------------------------------------------------
-
-  gen_natural_order_core : if INPUT_FORMAT_g = "NATURAL_ORDER" or INPUT_FORMAT_g = "-N/2_to_N/2" generate
-
-
-  begin
-
-
-    -- mux for stage 0 inputs
-    stg_in_real(0) <= stg_in_real_first when stg_input_sel(0) = '1' else
-                      (others => '0');
-    stg_in_imag(0) <= stg_in_imag_first when stg_input_sel(0) = '1' else
-                      (others => '0');
-    stg_in_valid(0) <= in_valid when stg_input_sel(0) = '1' else
-                       '0';
-    stg_in_sop(0) <= in_sop when stg_input_sel(0) = '1' else
-                     '0';
-    stg_in_eop(0) <= in_eop when stg_input_sel(0) = '1' else
-                     '0';
-    stg_in_control(0) <= stg_control_first when stg_input_sel(0) = '1' else
-                         (others => '0');
-
-    stg_in_inverse(0) <= in_inverse when stg_input_sel(0) = '1' else
-                         '0';
-
-    -- assign outputs, output is always taken from the last stage when data input is in natural order
-    out_inverse <= stg_out_inverse(NUM_STAGES_g - 1) and control_enable;
-    out_valid   <= stg_out_valid(NUM_STAGES_g - 1) and control_enable;
-    out_sop     <= stg_out_sop(NUM_STAGES_g - 1) and control_enable;
-    out_eop     <= stg_out_eop(NUM_STAGES_g - 1) and control_enable;
-
-    -- swap outputs on inverse
-    out_real <= stg_out_real(NUM_STAGES_g - 1) when out_inverse = '0' else
-                stg_out_imag(NUM_STAGES_g - 1);
-    out_imag <= stg_out_imag(NUM_STAGES_g - 1) when out_inverse = '0' else
-                stg_out_real(NUM_STAGES_g - 1);
-
-    -- STAGEs
-    gen_stages : for i in 0 to NUM_STAGES_g - 1 generate
-
-    begin
-      r22_stage : auk_dspip_r22sdf_stage
-        generic map (
-          DEVICE_FAMILY_g  => DEVICE_FAMILY_g,
-          STAGE_g          => i + 1,
-          NUM_STAGES_g     => NUM_STAGES_g,
-          DATAWIDTH_g      => stage_datawidth_array(i),
-          TWIDWIDTH_g      => TWIDWIDTH_g,
-          INPUT_FORMAT_g   => INPUT_FORMAT_g,
-          MAX_FFTPTS_g     => MAX_FFTPTS_g,
-          MAX_DATAWIDTH_g  => DATAWIDTH_g + MAX_GROW_g,
-          PIPELINE_g       => PIPELINE_g,
-          OPTIMIZE_MEM_g   => OPTIMIZE_MEM_g,
-          DEBUG_g          => DEBUG_g,
-          DSP_ROUNDING_g   => DSP_ROUNDING_g,
-          REPRESENTATION_g => REPRESENTATION_g,
-          DSP_ARCH_g       => DSP_ARCH_g,
-          CMA_GROW_g       => cma_grow_array(i)
-          )
-        port map (
-          clk         => clk,
-          reset       => reset,
-          enable      => control_enable,
-          in_inverse  => stg_in_inverse(i),
-          in_sop      => stg_in_sop(i),
-          in_eop      => stg_in_eop(i),
-          in_valid    => stg_in_valid(i),
-          in_fftpts   => in_fftpts,
-          in_pwr_2    => in_pwr_2,
-          in_sel      => stg_input_sel(i),
-          in_real     => stg_in_real(i),
-          in_imag     => stg_in_imag(i),
-          realtwid    => stg_realtwid(i),
-          imagtwid    => stg_imagtwid(i),
-          twid_rd_en  => stg_twid_rd_en(i),
-          twidaddr    => stg_twidaddr(i),
-          in_control  => stg_in_control(i),
-          out_real    => stg_out_real(i),
-          out_imag    => stg_out_imag(i),
-          out_valid   => stg_out_valid(i),
-          out_inverse => stg_out_inverse(i),
-          out_sop     => stg_out_sop(i),
-          out_eop     => stg_out_eop(i),
-          processing  => stg_processing(i),
-          out_control => stg_out_control(i)
-          );
-
-      ---------------------------------------------------------------------------
-      -- twiddle generator and stage connection 
-      gen_twiddles : if i > 0 generate
-      begin
-
-        stg_twidrom2 : auk_dspip_r22sdf_twrom
-          generic map (
-            DEVICE_FAMILY_g  => DEVICE_FAMILY_g,
-            MAX_FFTPTS_g     => MAX_FFTPTS_g,
-            STAGE_g          => i,
-            TWIDWIDTH_g      => TWIDWIDTH_g,
-            REPRESENTATION_g => REPRESENTATION_g,
-            INPUT_FORMAT_g   => INPUT_FORMAT_g,
-            OPTIMIZE_MEM_g   => OPTIMIZE_MEM_g,
-            REALFILE_g       => TWIDROM_BASE_g & "opt_twr" & integer'image(i) & ".hex",
-            IMAGFILE_g       => TWIDROM_BASE_g & "opt_twi" & integer'image(i) & ".hex"
-            )
-          port map (
-            clk      => clk,
-            reset    => reset,
-            enable   => control_enable,
-            pwr_2    => in_pwr_2,
-            rd_en    => stg_twid_rd_en(i),
-            addr     => stg_twidaddr(i)(log2_ceil(MAX_FFTPTS_g)- (i)*2 + 1 downto 0),
-            realtwid => stg_realtwid(i),
-            imagtwid => stg_imagtwid(i));
-
-      end generate gen_twiddles;
-
-      gen_stg_connect : if i < NUM_STAGES_g - 1 generate
-        -- mux connection between stages. the number of points
-        -- will determine whether the input to the stage is either the
-        -- incoming data or the data from the previous stage. Registered
-        -- for timing purposes.
-        stg_connect : auk_dspip_r22sdf_stg_pipe
-          generic map (
-            DATAWIDTH_g    => DATAWIDTH_g + MAX_GROW_g,
-            INPUT_FORMAT_g => INPUT_FORMAT_g,
-            MAX_FFTPTS_g   => MAX_FFTPTS_g)
-          port map (
-            clk               => clk,
-            reset             => reset,
-            enable            => control_enable,
-            stg_input_sel     => stg_input_sel(i+1),
-            stg_control_first => stg_control_first,
-            stg_valid_first   => in_valid,
-            stg_inverse_first => in_inverse,
-            stg_sop_first     => in_sop,
-            stg_eop_first     => in_eop,
-            stg_real_first    => stg_in_real_first,
-            stg_imag_first    => stg_in_imag_first,
-            stg_control_prev  => stg_out_control(i),
-            stg_inverse_prev  => stg_out_inverse(i),
-            stg_valid_prev    => stg_out_valid(i),
-            stg_sop_prev      => stg_out_sop(i),
-            stg_eop_prev      => stg_out_eop(i),
-            stg_real_prev     => stg_out_real(i),
-            stg_imag_prev     => stg_out_imag(i),
-            stg_real_next     => stg_in_real(i+1),
-            stg_imag_next     => stg_in_imag(i+1),
-            stg_control_next  => stg_in_control(i+1),
-            stg_inverse_next  => stg_in_inverse(i+1),
-            stg_sop_next      => stg_in_sop(i+1),
-            stg_eop_next      => stg_in_eop(i+1),
-            stg_valid_next    => stg_in_valid(i+1)
-            );
-      end generate gen_stg_connect;
-    end generate gen_stages;
-  end generate gen_natural_order_core;
-
-
-
-  -----------------------------------------------------------------------------
-  -- BIT REVERSED INPUTS
-  -----------------------------------------------------------------------------
-
-  gen_bit_reverse_core : if INPUT_FORMAT_g = "BIT_REVERSED" generate
-    signal stg_out_real_last    : std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-    signal stg_out_imag_last    : std_logic_vector(DATAWIDTH_g + MAX_GROW_g - 1 downto 0);
-    signal stg_out_sop_last     : std_logic;
-    signal stg_out_eop_last     : std_logic;
-    signal stg_out_inverse_last : std_logic;
-    signal stg_out_valid_last   : std_logic;
-
-    signal valid_stages     : std_logic_vector(NUM_STAGES_g-1 downto 0);
-    signal valid_stages_tmp : std_logic_vector(NUM_STAGES_g downto 0);
-
-  begin
-
-    -- data is always fed into the first stage when input is bit reversed.
-    stg_in_real(0)    <= stg_in_real_first;
-    stg_in_imag(0)    <= stg_in_imag_first;
-    stg_in_valid(0)   <= in_valid;
-    stg_in_sop(0)     <= in_sop;
-    stg_in_eop(0)     <= in_eop;
-    stg_in_inverse(0) <= in_inverse;
-    stg_in_control(0) <= stg_control_first;
-
-    -- output mux
-    out_valid   <= stg_out_valid_last and control_enable;
-    out_sop     <= stg_out_sop_last and control_enable;
-    out_eop     <= stg_out_eop_last and control_enable;
-    out_inverse <= stg_out_inverse_last and control_enable;
-
-    -- swap outputs on inverse
-    out_real <= stg_out_real_last when out_inverse = '0' else
-                stg_out_imag_last;
-    out_imag <= stg_out_imag_last when out_inverse = '0' else
-                stg_out_real_last;
-    
-    valid_stages_tmp <= std_logic_vector(unsigned(('1' & to_unsigned(0, NUM_STAGES_g))) - unsigned('0' & stg_input_sel));
-    valid_stages     <= valid_stages_tmp(NUM_STAGES_g-1 downto 0);
-
-    -- generate gen_stages
-    gen_stages : for i in 0 to NUM_STAGES_g - 1 generate
-
-    begin
-      r22_stage : auk_dspip_r22sdf_stage
-        generic map (
-          DEVICE_FAMILY_g  => DEVICE_FAMILY_g,
-          STAGE_g          => NUM_STAGES_g - i,
-          NUM_STAGES_g     => NUM_STAGES_g,
-          DATAWIDTH_g      => stage_datawidth_array(i),
-          TWIDWIDTH_g      => TWIDWIDTH_g,
-          INPUT_FORMAT_g   => INPUT_FORMAT_g,
-          MAX_FFTPTS_g     => MAX_FFTPTS_g,
-          MAX_DATAWIDTH_g  => DATAWIDTH_g + MAX_GROW_g,
-          PIPELINE_g       => PIPELINE_g,
-          OPTIMIZE_MEM_g   => 1,
-          DEBUG_g          => DEBUG_g,
-          DSP_ROUNDING_g   => DSP_ROUNDING_g,
-          CMA_GROW_g       => cma_grow_array(i),
-          REPRESENTATION_g => REPRESENTATION_g,
-          DSP_ARCH_g       => DSP_ARCH_g
-          )                                      
-        port map (
-          clk         => clk,
-          reset       => reset,
-          enable      => control_enable,
-          in_inverse  => stg_in_inverse(i),
-          in_sop      => stg_in_sop(i),
-          in_eop      => stg_in_eop(i),
-          in_valid    => stg_in_valid(i),
-          in_fftpts   => in_fftpts,
-          in_pwr_2    => in_pwr_2,
-          in_sel      => stg_input_sel(i),
-          in_real     => stg_in_real(i),
-          in_imag     => stg_in_imag(i),
-          realtwid    => stg_realtwid(i),
-          imagtwid    => stg_imagtwid(i),
-          twid_rd_en  => stg_twid_rd_en(i),
-          twidaddr    => stg_twidaddr(i),
-          in_control  => stg_in_control(i),
-          out_real    => stg_out_real(i),
-          out_imag    => stg_out_imag(i),
-          out_valid   => stg_out_valid(i),
-          out_inverse => stg_out_inverse(i),
-          out_sop     => stg_out_sop(i),
-          out_eop     => stg_out_eop(i),
-          processing  => stg_processing(i),
-          out_control => stg_out_control(i)
-          );
-
-      ---------------------------------------------------------------------------
-      -- twiddle generator and stage connection 
-      gen_twiddles : if i > 0 generate
-        signal mem_enable   : std_logic;
-        signal mem_enable_d : std_logic;
-        signal mem_enable_dd : std_logic;
-        
-      begin
-        mem_enable_delay : process (clk)
-        begin  -- process out_mux
-          if rising_edge(clk) then
-            if reset = '1' then
-              mem_enable_d  <= '0';
-              mem_enable_dd <= '0';
-            elsif control_enable = '1' then
-              mem_enable_d  <= stg_twid_rd_en(i);
-              mem_enable_dd <= mem_enable_d;
-            end if;
-          end if;
-        end process mem_enable_delay;
-
-
-        mem_enable <= control_enable and (mem_enable_dd or mem_enable_d) when MAX_PWR_2_c = 0 else
-                      control_enable and (stg_twid_rd_en(i) or mem_enable_dd or mem_enable_d);
-        
-        stg_twidrom : auk_dspip_r22sdf_twrom
-          generic map (
-            DEVICE_FAMILY_g  => DEVICE_FAMILY_g,
-            MAX_FFTPTS_g     => MAX_FFTPTS_g,
-            STAGE_g          => NUM_STAGES_g - (i),
-            TWIDWIDTH_g      => TWIDWIDTH_g,
-            OPTIMIZE_MEM_g   => 1,
-            REPRESENTATION_g => REPRESENTATION_g,
-            INPUT_FORMAT_g   => INPUT_FORMAT_g,
-            REALFILE_g       => TWIDROM_BASE_g & "opt_twr" & integer'image(NUM_STAGES_g - (i)) & ".hex",
-            IMAGFILE_g       => TWIDROM_BASE_g & "opt_twi" & integer'image(NUM_STAGES_g - (i)) & ".hex"
-            )
-          port map (
-            clk      => clk,
-            reset    => reset,
-            pwr_2    => in_pwr_2,
-            enable   => mem_enable,
-            addr     => stg_twidaddr(i)(log2_ceil(MAX_FFTPTS_g)- (NUM_STAGES_g - (i))*2 + 1 downto 0),
-            realtwid => stg_realtwid(i),
-            imagtwid => stg_imagtwid(i));
-
-      end generate gen_twiddles;
-
-      gen_stg_connect : if i < NUM_STAGES_g - 1 generate
-        -- mux connection between stages. the number of points
-        -- will determine whether the input to the stage is either the
-        -- incoming data or the data from the previous stage. Registered
-        -- for timing purposes.
-        stg_connect : auk_dspip_r22sdf_stg_out_pipe
-          generic map (
-            DATAWIDTH_g  => DATAWIDTH_g + MAX_GROW_g,
-            MAX_FFTPTS_g => MAX_FFTPTS_g)
-          port map (
-            clk              => clk,
-            reset            => reset,
-            enable           => control_enable,
-            stg_input_sel    => valid_stages(NUM_STAGES_g - (i+2)),
-            stg_control_prev => stg_out_control(i),
-            stg_valid_prev   => stg_out_valid(i),
-            stg_inverse_prev => stg_out_inverse(i),
-            stg_sop_prev     => stg_out_sop(i),
-            stg_eop_prev     => stg_out_eop(i),
-            stg_real_prev    => stg_out_real(i),
-            stg_imag_prev    => stg_out_imag(i),
-            stg_real_next    => stg_in_real(i+1),
-            stg_imag_next    => stg_in_imag(i+1),
-            stg_control_next => stg_in_control(i+1),
-            stg_inverse_next => stg_in_inverse(i+1),
-            stg_sop_next     => stg_in_sop(i+1),
-            stg_eop_next     => stg_in_eop(i+1),
-            stg_valid_next   => stg_in_valid(i+1)
-            );
-
-      end generate gen_stg_connect;
-
-
-    end generate gen_stages;
-
-
-    out_mux : process (clk)
-    begin  -- process out_mux
-      if rising_edge(clk) then
-        if reset = '1' then
-          stg_out_inverse_last <= '0';
-          stg_out_valid_last   <= '0';
-          stg_out_sop_last     <= '0';
-          stg_out_eop_last     <= '0';
-          stg_out_real_last    <= (others => '0');
-          stg_out_imag_last    <= (others => '0');
-        elsif control_enable = '1' then
-          for i in 0 to NUM_STAGES_g - 1 loop
-            if stg_input_sel(i) = '1' then
-              stg_out_inverse_last <= stg_out_inverse(NUM_STAGES_g- (i+1));
-              stg_out_valid_last   <= stg_out_valid(NUM_STAGES_g- (i+1));
-              stg_out_sop_last     <= stg_out_sop(NUM_STAGES_g- (i+1));
-              stg_out_eop_last     <= stg_out_eop(NUM_STAGES_g- (i+1));
-              stg_out_real_last    <= stg_out_real(NUM_STAGES_g- (i+1));
-              stg_out_imag_last    <= stg_out_imag(NUM_STAGES_g- (i+1));
-            end if;
-          end loop;  -- i
-          
-        end if;
-      end if;
-    end process out_mux;
-
-
-    
-
-  end generate gen_bit_reverse_core;
-
-
-
-end architecture rtl;
-
+-- (C) 2001-2025 Altera Corporation. All rights reserved.
+-- This simulation model contains highly confidential and
+-- proprietary information of Altera and is being provided
+-- in accordance with and subject to the protections of the
+-- applicable Altera Program License Subscription Agreement
+-- which governs its use and disclosure. Your use of Altera
+-- Corporation's design tools, logic functions and other
+-- software and tools, and its AMPP partner logic functions,
+-- and any output files from any of the foregoing (including device
+-- programming or simulation files), and any associated
+-- documentation or information are expressly subject to the
+-- terms and conditions of the Altera Program License Subscription
+-- Agreement, Altera IP License Agreement, or other
+-- applicable license agreement, including, without limitation,
+-- that your use is for the sole purpose of simulating designs
+-- for use exclusively in logic devices manufactured by Altera and sold
+-- by Altera or its authorized distributors. Please refer to the
+-- applicable agreement for further details. Altera products and
+-- services are protected under numerous U.S. and foreign patents,
+-- maskwork rights, copyrights and other intellectual property laws.
+-- Altera assumes no responsibility or liability arising out of the
+-- application or use of this simulation model.
+-- ACDS 25.1
+`protect BEGIN_PROTECTED
+`protect version = 1
+`protect author = "Altera"
+`protect encrypt_agent = "ModelSim", encrypt_agent_info = "10.4d"
+`protect key_keyowner = "Mentor Graphics Corporation" , key_keyname = "MGC-VERIF-SIM-RSA-1" , key_method = "rsa"
+`protect encoding = (enctype = "base64", line_length = 64, bytes = 128)
+`protect KEY_BLOCK
+jRYwpAm2pVPNGu3M2xPhRZABYPtO7gLQPWoxHoPGAxf53RpGE/1zlsqyukQVcoPG
+ZhfM7uvncluxra3GcfgXB95oN15WyU5Lad3wIIGulaXeX0M4ztI5B02Ud1/UD14k
+AjqKZR0Z/gskOoX9R6HbuyFg5byZikO2guz/zHHLvBc=
+`protect data_method = "aes128-cbc"
+`protect encoding = (enctype = "base64", line_length = 64, bytes = 27747)
+
+`protect DATA_BLOCK
+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
+`protect END_PROTECTED
