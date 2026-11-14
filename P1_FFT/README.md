@@ -1,6 +1,12 @@
 # FFT IP Core Verification
 Custom verification of the Altera FFT IP Core.
 
+## Requirements
+- Linux or Windows machine   
+- Quartus  (v18.1 and v25.1 tested)   
+- ModelSim (v20.1 tested)   
+- Python (SciPy and NumPy must be installed)   
+
 ## A. Project file structure
 ```
 .
