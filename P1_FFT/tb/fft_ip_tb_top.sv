@@ -143,18 +143,19 @@ module fft_ip_tb_top (
 
     initial begin: monitor
         localparam int OUTPUT_WIDTH = 22;
-        int   fd_out;
-        int   fd_rep;
-        logic signed [OUTPUT_WIDTH-1:0] exp_fft_real;
-        logic signed [OUTPUT_WIDTH-1:0] exp_fft_imag;
-        logic signed [OUTPUT_WIDTH-1:0] fft_real;
-        logic signed [OUTPUT_WIDTH-1:0] fft_imag;
-        int   unsigned pass; 
-        int   unsigned fail;
-        int   unsigned cycles;
-        time  clk_period;
-        time  time_sop;
-        bit   streaming;        
+        string status;  
+        int    fd_out;
+        int    fd_rep;
+        logic  signed [OUTPUT_WIDTH-1:0] exp_fft_real;
+        logic  signed [OUTPUT_WIDTH-1:0] exp_fft_imag;
+        logic  signed [OUTPUT_WIDTH-1:0] fft_real;
+        logic  signed [OUTPUT_WIDTH-1:0] fft_imag;
+        int    unsigned pass; 
+        int    unsigned fail;
+        int    unsigned cycles;
+        time   clk_period;
+        time   time_sop;
+        bit    streaming;      
 
         pass       =   0; 
         fail       =   0; 
@@ -177,10 +178,18 @@ module fft_ip_tb_top (
                 fft_imag  = $signed(fft_ip_inst_source_bfm.get_source_imag());
                 if(fft_ip_inst_source_bfm.get_source_sop()) time_sop = $time;
                 if($fscanf(fd_out, "%d %d", exp_fft_real, exp_fft_imag) > 0) begin 
-                    if(exp_fft_real == fft_real && exp_fft_imag == fft_imag) pass = pass + 1;
-                    else fail = fail + 1;
-                    $display("EXPECTED: %d,%d | GOT: %d,%d", exp_fft_real, exp_fft_imag, fft_real, fft_imag);
-                    $fdisplay(fd_rep, "EXPECTED: %d,%d | GOT: %d,%d", exp_fft_real, exp_fft_imag, fft_real, fft_imag);                             
+                    if(exp_fft_real == fft_real && exp_fft_imag == fft_imag) begin
+                        status = "PASS";
+                        pass   = pass + 1;
+                    end
+                    else begin
+                        status = "FAIL";
+                        fail   = fail + 1;
+                    end
+                    $display("EXPECTED: %d,%d | GOT: %d,%d | STATUS: %s", 
+                             exp_fft_real, exp_fft_imag, fft_real, fft_imag, status);
+                    $fdisplay(fd_rep, "EXPECTED: %d,%d | GOT: %d,%d | STATUS: %s", 
+                              exp_fft_real, exp_fft_imag, fft_real, fft_imag, status);                             
                 end
             end
             else begin

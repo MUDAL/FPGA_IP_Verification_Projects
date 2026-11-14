@@ -7,7 +7,7 @@ import numpy as np
 from   scipy.fft import fft
 
 FFT_LENGTH = 8
-NUM_INPUTS = FFT_LENGTH * 15
+NUM_INPUTS = FFT_LENGTH * 100
 MAX_VALUE  = np.pow(2,10) - 1
 
 input_data = np.random.randint(MAX_VALUE, size=NUM_INPUTS)
