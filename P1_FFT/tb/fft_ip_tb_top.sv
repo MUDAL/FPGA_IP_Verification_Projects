@@ -147,7 +147,7 @@ module fft_ip_tb_top (
 
     localparam int OUTPUT_WIDTH = 22;
 
-    // Return true if absolute difference is 1. Otherwise, return 0.
+    // Return true (1) if absolute difference is 1. Otherwise, return false (0).
     function bit abs_diff(logic signed [OUTPUT_WIDTH-1:0] expected, 
                           logic signed [OUTPUT_WIDTH-1:0] got);
         logic signed [OUTPUT_WIDTH-1:0] diff;
