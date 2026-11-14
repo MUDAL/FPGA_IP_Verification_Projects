@@ -2,17 +2,15 @@
 **/build/
 
 # Text files can be re-generated
-P1_FFT/tb/golden_model/*.txt
+/P1_FFT/tb/golden_model/*.txt
 
 # Keep the Qsys file
-P1_FFT/ip/**
+/P1_FFT/ip/*
 !/P1_FFT/ip/*.qsys
 
 # Keep the mentor (contains ModelSim Tcl script) and "simulation library" directories.
-P1_FFT/tb/testbench/*
-!/P1_FFT/tb/testbench/mentor/
-!/P1_FFT/tb/testbench/fft_ip_tb/
-
-P1_FFT/tb/testbench/fft_ip_tb/simulation/submodules/aldec/
-P1_FFT/tb/testbench/fft_ip_tb/simulation/submodules/c_model/
+/P1_FFT/tb/*
+!/P1_FFT/tb/golden_model/
+!/P1_FFT/tb/fft_ip_tb_top.sv
+!/P1_FFT/tb/sim_top*
 
