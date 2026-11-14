@@ -1,4 +1,5 @@
 @echo off
+del *.cmp *.ppf *.v *.vhd *.bsf
 echo:
 echo =============================== Running FFT IP Simulation ===============================
 echo:

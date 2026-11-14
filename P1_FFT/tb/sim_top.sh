@@ -1,4 +1,5 @@
 #!/bin/bash
+rm *.cmp *.ppf *.v *.vhd *.bsf
 echo
 echo =============================== Running FFT IP Simulation ===============================
 echo
