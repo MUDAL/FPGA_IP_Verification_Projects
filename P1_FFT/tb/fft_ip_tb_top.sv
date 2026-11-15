@@ -4,7 +4,7 @@
 // Top-level FFT IP testbench
 
 // Updated on 14/11/2026
-// Changes(s) made:
+// Change(s) made:
 // - Accounted for slight differences in results due to convergent rounding edge cases.
 
 `timescale 1 ps / 1 ps
