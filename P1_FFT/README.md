@@ -7,6 +7,10 @@ Custom verification of the Altera FFT IP Core.
 - ModelSim (v20.1 tested)   
 - Python (SciPy and NumPy must be installed)   
 
+## Video Demo
+
+[FFT IP Verification: Demo](https://drive.google.com/file/d/1ZvP60REn9MFPzRUoFLkTNAwQMamZ1G7b/view?usp=sharing)  
+
 ## A. Project file structure
 ```
 .
